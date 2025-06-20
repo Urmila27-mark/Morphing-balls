@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Continuous Morphing Bouncing Balls</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: #111;
+    }
+    body {
+      position: relative;
+    }
+    .ball {
+      position: absolute;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      user-select: none;
+      box-shadow: 0 0 10px;
+      transition: box-shadow 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+<script>
+  const NUM_BALLS = 30;
+  const RADIUS = 15; // ball radius
+  const balls = [];
+  let formationIndex = 0;
+  let morphing = false;
+
+  // Utility: generate random bright color
+  function randomColor() {
+    return `hsl(${Math.floor(Math.random() * 360)}, 80%, 70%)`;
+  }
+
+  // Create balls with initial positions & velocity
+  for (let i = 0; i < NUM_BALLS; i++) {
+    const ball = document.createElement('div');
+    ball.classList.add('ball');
+    document.body.appendChild(ball);
+
+    // Random initial positions all over screen
+    const x = Math.random() * (window.innerWidth - RADIUS * 2);
+    const y = Math.random() * (window.innerHeight - RADIUS * 2);
+
+    const velocity = {
+      x: (Math.random() * 4 + 1) * (Math.random() < 0.5 ? 1 : -1),
+      y: (Math.random() * 4 + 1) * (Math.random() < 0.5 ? 1 : -1),
+    };
+
+    const color = randomColor();
+    ball.style.background = color;
+    ball.style.boxShadow = `0 0 10px ${color}`;
+
+    balls.push({ el: ball, x, y, velocity, color, target: null });
+  }
+
+  // Collision detection
+  function areColliding(b1, b2) {
+    const dx = b1.x - b2.x; 
+    const dy = b1.y - b2.y;
+    return Math.hypot(dx, dy) < RADIUS * 2;
+  }
+
+  // Elastic collision response
+  function resolveCollision(b1, b2) {
+    const dx = b1.x - b2.x;
+    const dy = b1.y - b2.y;
+    const collisionAngle = Math.atan2(dy, dx);
+
+    const speed1 = Math.hypot(b1.velocity.x, b1.velocity.y);
+    const speed2 = Math.hypot(b2.velocity.x, b2.velocity.y);
+
+    const direction1 = Math.atan2(b1.velocity.y, b1.velocity.x);
+    const direction2 = Math.atan2(b2.velocity.y, b2.velocity.x);
+
+    const velocityX1 = speed1 * Math.cos(direction1 - collisionAngle);
+    const velocityY1 = speed1 * Math.sin(direction1 - collisionAngle);
+    const velocityX2 = speed2 * Math.cos(direction2 - collisionAngle);
+    const velocityY2 = speed2 * Math.sin(direction2 - collisionAngle);
+
+    const finalVelocityX1 = velocityX2;
+    const finalVelocityX2 = velocityX1;
+
+    b1.velocity.x = Math.cos(collisionAngle) * finalVelocityX1 + Math.cos(collisionAngle + Math.PI / 2) * velocityY1;
+    b1.velocity.y = Math.sin(collisionAngle) * finalVelocityX1 + Math.sin(collisionAngle + Math.PI / 2) * velocityY1;
+    b2.velocity.x = Math.cos(collisionAngle) * finalVelocityX2 + Math.cos(collisionAngle + Math.PI / 2) * velocityY2;
+    b2.velocity.y = Math.sin(collisionAngle) * finalVelocityX2 + Math.sin(collisionAngle + Math.PI / 2) * velocityY2;
+  }
+
+  // Change ball color helper
+  function changeColor(ball) {
+    const newColor = randomColor();
+    ball.color = newColor;
+    ball.el.style.background = newColor;
+    ball.el.style.boxShadow = `0 0 10px ${newColor}`;
+  }
+
+  // Formation functions:
+  // Letter "A" pattern - 30 points roughly making a capital A
+  function formationLetterA(centerX, centerY, height, count) {
+    const positions = [];
+    const leftLegCount = Math.floor(count * 0.4);
+    const rightLegCount = Math.floor(count * 0.4);
+    const crossBarCount = count - leftLegCount - rightLegCount;
+
+    for (let i = 0; i < leftLegCount; i++) {
+      const t = i / (leftLegCount - 1);
+      const x = centerX - height / 4 + t * (height / 4);
+      const y = centerY + height / 2 - t * height;
+      positions.push({ x: x - RADIUS, y: y - RADIUS });
+    }
+    for (let i = 0; i < rightLegCount; i++) {
+      const t = i / (rightLegCount - 1);
+      const x = centerX + height / 4 - t * (height / 4);
+      const y = centerY + height / 2 - t * height;
+      positions.push({ x: x - RADIUS, y: y - RADIUS });
+    }
+    for (let i = 0; i < crossBarCount; i++) {
+      const t = i / (crossBarCount - 1);
+      const x = centerX - height / 6 + t * (height / 3);
+      const y = centerY;
+      positions.push({ x: x - RADIUS, y: y - RADIUS });
+    }
+    return positions;
+  }
+function formationLetterD(centerX, centerY, height, count) {
+  const positions = [];
+  const verticalBallsCount = 12;
+  const semicircleBallsCount = count - verticalBallsCount;
+  const radius = height / 2;
+
+  // Vertical line (left side of D)
+  const spacing = height / (verticalBallsCount - 1);
+  for (let i = 0; i < verticalBallsCount; i++) {
+    const x = centerX - radius / 2; // shifted left a bit for vertical line
+    const y = centerY - radius + i * spacing;
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  // Semicircle (right curve of D) from 270deg (3/2π) to 90deg (1/2π)
+  for (let i = 0; i < semicircleBallsCount; i++) {
+    const angle = (1.5 * Math.PI) + (i / (semicircleBallsCount - 1)) * Math.PI;
+    const x = centerX - radius / 2 + radius * Math.cos(angle);
+    const y = centerY + radius * Math.sin(angle);
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  return positions;
+}
+
+  
+  // Letter "K" pattern - 30 points roughly making a capital K
+  function formationLetterK(centerX, centerY, height, count) {
+    const positions = [];
+    const leftLegCount = Math.floor(count * 0.4);
+    const upperArmCount = Math.floor(count * 0.3);
+    const lowerArmCount = count - leftLegCount - upperArmCount;
+
+    // left vertical leg
+    for(let i = 0; i < leftLegCount; i++) {
+      const t = i / (leftLegCount - 1);
+      const x = centerX - height / 4;
+      const y = centerY + height/2 - t * height;
+      positions.push({ x: x - RADIUS, y: y - RADIUS });
+    }
+
+    // upper diagonal arm
+    for(let i = 0; i < upperArmCount; i++) {
+      const t = i / (upperArmCount - 1);
+      const x = centerX - height / 4 + t * (height / 2);
+      const y = centerY - t * (height / 2);
+      positions.push({ x: x - RADIUS, y: y - RADIUS });
+    }
+
+    // lower diagonal arm
+    for(let i = 0; i < lowerArmCount; i++) {
+      const t = i / (lowerArmCount - 1);
+      const x = centerX - height / 4 + t * (height / 2);
+      const y = centerY + t * (height / 2);
+      positions.push({ x: x - RADIUS, y: y - RADIUS });
+    }
+
+    return positions;
+  }
+ // Letter "U" pattern - vertical left & right lines + bottom horizontal line
+function formationLetterU(centerX, centerY, height, count) {
+  const positions = [];
+  const verticalCount = Math.floor(count * 0.4);
+  const horizontalCount = count - 2 * verticalCount;
+
+  // Left vertical line
+  for (let i = 0; i < verticalCount; i++) {
+    const t = i / (verticalCount - 1);
+    const x = centerX - height / 4;
+    const y = centerY - height / 2 + t * height;
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  // Bottom horizontal line
+  for (let i = 0; i < horizontalCount; i++) {
+    const t = i / (horizontalCount - 1);
+    const x = centerX - height / 4 + t * (height / 2);
+    const y = centerY + height / 2;
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  // Right vertical line
+  for (let i = 0; i < verticalCount; i++) {
+    const t = i / (verticalCount - 1);
+    const x = centerX + height / 4;
+    const y = centerY - height / 2 + t * height;
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  return positions;
+}
+function formationLetterT(centerX, centerY, height, count) {
+  const positions = [];
+
+  const horizontalCount = Math.floor(count * 0.6);
+  const verticalCount = count - horizontalCount;
+
+  // Top horizontal line
+  for (let i = 0; i < horizontalCount; i++) {
+    const t = i / (horizontalCount - 1);
+    const x = centerX - height / 2 + t * height;
+    const y = centerY - height / 2;
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  // Vertical line (centered below horizontal line)
+  for (let i = 0; i < verticalCount; i++) {
+    const t = i / (verticalCount - 1);
+    const x = centerX;
+    const y = centerY - height / 2 + t * height;
+    positions.push({ x: x - RADIUS, y: y - RADIUS });
+  }
+
+  return positions;
+}
+
+  // Array of formation functions in order
+  const formations = [
+   
+    () => formationLetterD(window.innerWidth/2, window.innerHeight/2, Math.min(window.innerWidth, window.innerHeight) / 2, NUM_BALLS),
+    () => formationLetterK(window.innerWidth/2, window.innerHeight/2, Math.min(window.innerWidth, window.innerHeight) / 2, NUM_BALLS),
+     () => formationLetterA(window.innerWidth/2, window.innerHeight/2, Math.min(window.innerWidth, window.innerHeight) / 2, NUM_BALLS),
+     () => formationLetterU(window.innerWidth/2, window.innerHeight/2, Math.min(window.innerWidth, window.innerHeight) / 2, NUM_BALLS),
+     () => formationLetterT(window.innerWidth / 2, window.innerHeight / 2, Math.min(window.innerWidth, window.innerHeight) / 2, NUM_BALLS),
+  ];
+
+  // Smoothly move ball toward target position
+  function moveTowards(ball, targetX, targetY, speed=0.07) {
+    ball.x += (targetX - ball.x) * speed;
+    ball.y += (targetY - ball.y) * speed;
+  }
+
+  // Main animation loop
+  let bouncing = true;
+  let lastMorphTime = 0;
+  const morphInterval = 5000; // 8 seconds per formation
+
+  function animate(time=0) {
+    if (!lastMorphTime) lastMorphTime = time;
+    const elapsedSinceMorph = time - lastMorphTime;
+
+    if (bouncing) {
+      // Bounce with collision & color change
+      for (let i = 0; i < balls.length; i++) {
+        const ball = balls[i];
+        ball.x += ball.velocity.x;
+        ball.y += ball.velocity.y;
+
+        // Bounce walls & color change
+        if (ball.x <= 0) {
+          ball.x = 0;
+          ball.velocity.x *= -1;
+          changeColor(ball);
+        } else if (ball.x >= window.innerWidth - RADIUS * 2) {
+          ball.x = window.innerWidth - RADIUS * 2;
+          ball.velocity.x *= -1;
+          changeColor(ball);
+        }
+        if (ball.y <= 0) {
+          ball.y = 0;
+          ball.velocity.y *= -1;
+          changeColor(ball);
+        } else if (ball.y >= window.innerHeight - RADIUS * 2) {
+          ball.y = window.innerHeight - RADIUS * 2;
+          ball.velocity.y *= -1;
+          changeColor(ball);
+        }
+
+        // Check collisions with other balls
+        for (let j = i + 1; j < balls.length; j++) {
+          const other = balls[j];
+          if (areColliding(ball, other)) {
+            resolveCollision(ball, other);
+            changeColor(ball);
+            changeColor(other);
+
+            // Push apart overlap
+            const overlap = RADIUS * 2 - Math.hypot(ball.x - other.x, ball.y - other.y);
+            const dx = (ball.x - other.x) / Math.hypot(ball.x - other.x, ball.y - other.y);
+            const dy = (ball.y - other.y) / Math.hypot(ball.x - other.x, ball.y - other.y);
+
+            ball.x += dx * overlap / 2;
+            ball.y += dy * overlap / 2;
+            other.x -= dx * overlap / 2;
+            other.y -= dy * overlap / 2;
+          }
+        }
+        ball.el.style.left = ball.x + 'px';
+        ball.el.style.top = ball.y + 'px';
+      }
+    } else {
+      // Morph mode - balls move smoothly to target formation
+      balls.forEach(ball => {
+        if (!ball.target) return;
+        moveTowards(ball, ball.target.x, ball.target.y, 0.07);
+        ball.el.style.left = ball.x + 'px';
+        ball.el.style.top = ball.y + 'px';
+
+        // Slow velocity down during morph
+        ball.velocity.x *= 0.95;
+        ball.velocity.y *= 0.95;
+      });
+    }
+
+    // Switch mode and formation automatically
+    if (elapsedSinceMorph > morphInterval) {
+      lastMorphTime = time;
+      if (bouncing) {
+        morphing = true;
+        bouncing = false;
+        const targets = formations[formationIndex]();
+        balls.forEach((ball, i) => {
+          ball.target = targets[i];
+        });
+      } else {
+        morphing = false;
+        bouncing = true;
+        balls.forEach(ball => {
+          ball.velocity.x = (Math.random() * 4 + 1) * (Math.random() < 0.5 ? 1 : -1);
+          ball.velocity.y = (Math.random() * 4 + 1) * (Math.random() < 0.5 ? 1 : -1);
+          ball.target = null;
+        });
+        formationIndex = (formationIndex + 1) % formations.length;
+      }
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  // Keyboard toggle for morphing mode with "k"
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'k') {
+      if (bouncing) {
+        morphing = true;
+        bouncing = false;
+        const targets = formations[formationIndex]();
+        balls.forEach((ball, i) => {
+          ball.target = targets[i];
+        });
+      } else {
+        morphing = false;
+        bouncing = true;
+        balls.forEach(ball => {
+          ball.velocity.x = (Math.random() * 4 + 1) * (Math.random() < 0.5 ? 1 : -1);
+          ball.velocity.y = (Math.random() * 4 + 1) * (Math.random() < 0.5 ? 1 : -1);
+          ball.target = null;
+        });
+        formationIndex = (formationIndex + 1) % formations.length;
+      }
+      lastMorphTime = performance.now();
+    }
+  });
+
+  animate();
+
+  // Resize handler: recalc targets if morphing
+  window.addEventListener('resize', () => {
+    if (!bouncing) {
+      const targets = formations[formationIndex]();
+      balls.forEach((ball, i) => {
+        ball.target = targets[i];
+      });
+    }
+  });
+</script>
+</body>
+</html>
